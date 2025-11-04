@@ -23,6 +23,11 @@ const Sidebar = ({ isOpen, onClose }) => {
       href: "/assignments",
       icon: "ClipboardList",
     },
+{
+      name: "Students",
+      href: "/students",
+      icon: "Users",
+    },
     {
       name: "Calendar",
       href: "/calendar",

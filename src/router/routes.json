@@ -62,6 +62,19 @@
       },
       "redirectOnDeny": "/login"
     }
+},
+  "/students": {
+    "allow": {
+      "when": {
+        "conditions": [
+          {
+            "label": "User must be logged in to view students",
+            "rule": "authenticated"
+          }
+        ]
+      },
+      "redirectOnDeny": "/login"
+    }
   },
   "/login": {
     "allow": {

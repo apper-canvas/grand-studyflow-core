@@ -1,6 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
-import { lazy, Suspense } from "react";
-import { getRouteConfig } from "./route.utils";
+import React, { Suspense, lazy } from "react";
+import { getRouteConfig } from "@/router/route.utils";
 import Root from "@/layouts/Root";
 import Layout from "@/components/organisms/Layout";
 
@@ -8,6 +8,7 @@ import Layout from "@/components/organisms/Layout";
 const Dashboard = lazy(() => import("@/components/pages/Dashboard"));
 const Courses = lazy(() => import("@/components/pages/Courses"));
 const Assignments = lazy(() => import("@/components/pages/Assignments"));
+const Students = lazy(() => import("@/components/pages/Students"));
 const Calendar = lazy(() => import("@/components/pages/Calendar"));
 const Grades = lazy(() => import("@/components/pages/Grades"));
 const NotFound = lazy(() => import("@/components/pages/NotFound"));
@@ -17,7 +18,6 @@ const Callback = lazy(() => import("@/components/pages/Callback"));
 const ErrorPage = lazy(() => import("@/components/pages/ErrorPage"));
 const ResetPassword = lazy(() => import("@/components/pages/ResetPassword"));
 const PromptPassword = lazy(() => import("@/components/pages/PromptPassword"));
-
 // Create route helper function
 const createRoute = ({
   path,
@@ -82,6 +82,10 @@ const mainRoutes = [
   createRoute({
     path: "grades",
     element: <Grades />
+}),
+  createRoute({
+    path: "students",
+    element: <Students />
   }),
   createRoute({
     path: "*",
