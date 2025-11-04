@@ -1,136 +1,315 @@
-import assignmentsData from "@/services/mockData/assignments.json";
-
-// Simulate network delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Get assignments from localStorage or use default data
-const getAssignments = () => {
-  const stored = localStorage.getItem("studyflow_assignments");
-  return stored ? JSON.parse(stored) : [...assignmentsData];
-};
-
-// Save assignments to localStorage
-const saveAssignments = (assignments) => {
-  localStorage.setItem("studyflow_assignments", JSON.stringify(assignments));
-};
+import { getApperClient } from "@/services/apperClient";
+import { toast } from "react-toastify";
 
 export const assignmentService = {
   async getAll() {
-    await delay(300);
     try {
-      return getAssignments();
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      const response = await apperClient.fetchRecords('assignment_c', {
+        fields: [
+          {"field": {"Name": "Id"}},
+          {"field": {"Name": "title_c"}},
+          {"field": {"Name": "description_c"}},
+          {"field": {"Name": "due_date_c"}},
+          {"field": {"Name": "completed_c"}},
+          {"field": {"Name": "course_id_c"}},
+          {"field": {"Name": "priority_c"}},
+          {"field": {"Name": "grade_c"}},
+          {"field": {"Name": "weight_c"}},
+          {"field": {"Name": "type_c"}}
+        ]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return [];
+      }
+
+      // Transform database fields to UI format
+      return response.data.map(assignment => ({
+        Id: assignment.Id,
+        title: assignment.title_c,
+        description: assignment.description_c,
+        dueDate: assignment.due_date_c,
+        completed: assignment.completed_c || false,
+        courseId: assignment.course_id_c?.Id?.toString() || assignment.course_id_c?.toString(),
+        priority: assignment.priority_c,
+        grade: assignment.grade_c,
+        weight: assignment.weight_c,
+        type: assignment.type_c
+      }));
     } catch (error) {
-      throw new Error("Failed to fetch assignments");
+      console.error("Error fetching assignments:", error?.response?.data?.message || error);
+      return [];
     }
   },
 
   async getById(id) {
-    await delay(200);
     try {
-      const assignments = getAssignments();
-      const assignment = assignments.find(a => a.Id === parseInt(id));
-      if (!assignment) {
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      const response = await apperClient.getRecordById('assignment_c', parseInt(id), {
+        fields: [
+          {"field": {"Name": "Id"}},
+          {"field": {"Name": "title_c"}},
+          {"field": {"Name": "description_c"}},
+          {"field": {"Name": "due_date_c"}},
+          {"field": {"Name": "completed_c"}},
+          {"field": {"Name": "course_id_c"}},
+          {"field": {"Name": "priority_c"}},
+          {"field": {"Name": "grade_c"}},
+          {"field": {"Name": "weight_c"}},
+          {"field": {"Name": "type_c"}}
+        ]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return null;
+      }
+
+      if (!response.data) {
         throw new Error("Assignment not found");
       }
-      return assignment;
-    } catch (error) {
-      throw new Error("Failed to fetch assignment");
-    }
-  },
 
-  async getByCourseId(courseId) {
-    await delay(250);
-    try {
-      const assignments = getAssignments();
-      return assignments.filter(a => a.courseId === courseId.toString());
+      // Transform database fields to UI format
+      const assignment = response.data;
+      return {
+        Id: assignment.Id,
+        title: assignment.title_c,
+        description: assignment.description_c,
+        dueDate: assignment.due_date_c,
+        completed: assignment.completed_c || false,
+        courseId: assignment.course_id_c?.Id?.toString() || assignment.course_id_c?.toString(),
+        priority: assignment.priority_c,
+        grade: assignment.grade_c,
+        weight: assignment.weight_c,
+        type: assignment.type_c
+      };
     } catch (error) {
-      throw new Error("Failed to fetch course assignments");
+      console.error(`Error fetching assignment ${id}:`, error?.response?.data?.message || error);
+      return null;
     }
   },
 
   async create(assignmentData) {
-    await delay(400);
     try {
-      const assignments = getAssignments();
-      const maxId = assignments.length > 0 ? Math.max(...assignments.map(a => a.Id)) : 0;
-      
-      const newAssignment = {
-        ...assignmentData,
-        Id: maxId + 1,
-        createdAt: new Date().toISOString()
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      // Transform UI format to database fields (only Updateable fields)
+      const dbAssignment = {
+        title_c: assignmentData.title,
+        description_c: assignmentData.description,
+        due_date_c: assignmentData.dueDate,
+        completed_c: assignmentData.completed || false,
+        course_id_c: parseInt(assignmentData.courseId),
+        priority_c: assignmentData.priority,
+        grade_c: assignmentData.grade,
+        weight_c: assignmentData.weight,
+        type_c: assignmentData.type
       };
-      
-      const updatedAssignments = [...assignments, newAssignment];
-      saveAssignments(updatedAssignments);
-      return newAssignment;
-    } catch (error) {
+
+      const response = await apperClient.createRecord('assignment_c', {
+        records: [dbAssignment]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        throw new Error("Failed to create assignment");
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to create ${failed.length} assignments:`, failed);
+          failed.forEach(record => {
+            record.errors?.forEach(error => toast.error(`${error.fieldLabel}: ${error}`));
+            if (record.message) toast.error(record.message);
+          });
+        }
+
+        if (successful.length > 0) {
+          const createdAssignment = successful[0].data;
+          return {
+            Id: createdAssignment.Id,
+            title: createdAssignment.title_c,
+            description: createdAssignment.description_c,
+            dueDate: createdAssignment.due_date_c,
+            completed: createdAssignment.completed_c || false,
+            courseId: createdAssignment.course_id_c?.Id?.toString() || createdAssignment.course_id_c?.toString(),
+            priority: createdAssignment.priority_c,
+            grade: createdAssignment.grade_c,
+            weight: createdAssignment.weight_c,
+            type: createdAssignment.type_c
+          };
+        }
+      }
+
       throw new Error("Failed to create assignment");
+    } catch (error) {
+      console.error("Error creating assignment:", error?.response?.data?.message || error);
+      throw error;
     }
   },
 
   async update(id, assignmentData) {
-    await delay(400);
     try {
-      const assignments = getAssignments();
-      const index = assignments.findIndex(a => a.Id === parseInt(id));
-      
-      if (index === -1) {
-        throw new Error("Assignment not found");
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
       }
-      
-      const updatedAssignment = {
-        ...assignments[index],
-        ...assignmentData,
-        Id: parseInt(id)
+
+      // Transform UI format to database fields (only Updateable fields)
+      const dbAssignment = {
+        Id: parseInt(id),
+        title_c: assignmentData.title,
+        description_c: assignmentData.description,
+        due_date_c: assignmentData.dueDate,
+        completed_c: assignmentData.completed || false,
+        course_id_c: parseInt(assignmentData.courseId),
+        priority_c: assignmentData.priority,
+        grade_c: assignmentData.grade,
+        weight_c: assignmentData.weight,
+        type_c: assignmentData.type
       };
-      
-      const updatedAssignments = [...assignments];
-      updatedAssignments[index] = updatedAssignment;
-      saveAssignments(updatedAssignments);
-      return updatedAssignment;
-    } catch (error) {
+
+      const response = await apperClient.updateRecord('assignment_c', {
+        records: [dbAssignment]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        throw new Error("Failed to update assignment");
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to update ${failed.length} assignments:`, failed);
+          failed.forEach(record => {
+            record.errors?.forEach(error => toast.error(`${error.fieldLabel}: ${error}`));
+            if (record.message) toast.error(record.message);
+          });
+        }
+
+        if (successful.length > 0) {
+          const updatedAssignment = successful[0].data;
+          return {
+            Id: updatedAssignment.Id,
+            title: updatedAssignment.title_c,
+            description: updatedAssignment.description_c,
+            dueDate: updatedAssignment.due_date_c,
+            completed: updatedAssignment.completed_c || false,
+            courseId: updatedAssignment.course_id_c?.Id?.toString() || updatedAssignment.course_id_c?.toString(),
+            priority: updatedAssignment.priority_c,
+            grade: updatedAssignment.grade_c,
+            weight: updatedAssignment.weight_c,
+            type: updatedAssignment.type_c
+          };
+        }
+      }
+
       throw new Error("Failed to update assignment");
+    } catch (error) {
+      console.error("Error updating assignment:", error?.response?.data?.message || error);
+      throw error;
     }
   },
 
   async delete(id) {
-    await delay(300);
     try {
-      const assignments = getAssignments();
-      const filteredAssignments = assignments.filter(a => a.Id !== parseInt(id));
-      
-      if (filteredAssignments.length === assignments.length) {
-        throw new Error("Assignment not found");
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
       }
-      
-      saveAssignments(filteredAssignments);
-      return true;
+
+      const response = await apperClient.deleteRecord('assignment_c', {
+        RecordIds: [parseInt(id)]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return false;
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to delete ${failed.length} assignments:`, failed);
+          failed.forEach(record => {
+            if (record.message) toast.error(record.message);
+          });
+        }
+        return successful.length > 0;
+      }
+
+      return false;
     } catch (error) {
-      throw new Error("Failed to delete assignment");
+      console.error("Error deleting assignment:", error?.response?.data?.message || error);
+      return false;
     }
   },
 
   async toggleComplete(id, completed) {
-    await delay(200);
     try {
-      const assignments = getAssignments();
-      const index = assignments.findIndex(a => a.Id === parseInt(id));
-      
-      if (index === -1) {
-        throw new Error("Assignment not found");
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
       }
-      
-      const updatedAssignment = {
-        ...assignments[index],
-        completed
-      };
-      
-      const updatedAssignments = [...assignments];
-      updatedAssignments[index] = updatedAssignment;
-      saveAssignments(updatedAssignments);
-      return updatedAssignment;
+
+      const response = await apperClient.updateRecord('assignment_c', {
+        records: [{
+          Id: parseInt(id),
+          completed_c: completed
+        }]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        throw new Error("Failed to toggle assignment completion");
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to update ${failed.length} assignments:`, failed);
+          failed.forEach(record => {
+            record.errors?.forEach(error => toast.error(`${error.fieldLabel}: ${error}`));
+            if (record.message) toast.error(record.message);
+          });
+        }
+
+        return successful.length > 0;
+      }
+
+      return false;
     } catch (error) {
-      throw new Error("Failed to toggle assignment completion");
+      console.error("Error toggling assignment completion:", error?.response?.data?.message || error);
+      throw error;
     }
   }
 };

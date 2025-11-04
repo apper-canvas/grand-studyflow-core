@@ -1,102 +1,249 @@
-import coursesData from "@/services/mockData/courses.json";
-
-// Simulate network delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Get courses from localStorage or use default data
-const getCourses = () => {
-  const stored = localStorage.getItem("studyflow_courses");
-  return stored ? JSON.parse(stored) : [...coursesData];
-};
-
-// Save courses to localStorage
-const saveCourses = (courses) => {
-  localStorage.setItem("studyflow_courses", JSON.stringify(courses));
-};
+import { getApperClient } from "@/services/apperClient";
+import { toast } from "react-toastify";
 
 export const courseService = {
   async getAll() {
-    await delay(300);
     try {
-      return getCourses();
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      const response = await apperClient.fetchRecords('course_c', {
+        fields: [
+          {"field": {"Name": "Id"}},
+          {"field": {"Name": "name_c"}},
+          {"field": {"Name": "instructor_c"}},
+          {"field": {"Name": "color_c"}},
+          {"field": {"Name": "credits_c"}},
+          {"field": {"Name": "semester_c"}},
+          {"field": {"Name": "schedule_c"}}
+        ]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return [];
+      }
+
+      // Transform database fields to UI format
+      return response.data.map(course => ({
+        Id: course.Id,
+        name: course.name_c,
+        instructor: course.instructor_c,
+        color: course.color_c,
+        credits: course.credits_c,
+        semester: course.semester_c,
+        schedule: course.schedule_c ? JSON.parse(course.schedule_c) : []
+      }));
     } catch (error) {
-      throw new Error("Failed to fetch courses");
+      console.error("Error fetching courses:", error?.response?.data?.message || error);
+      return [];
     }
   },
 
   async getById(id) {
-    await delay(200);
     try {
-      const courses = getCourses();
-      const course = courses.find(c => c.Id === parseInt(id));
-      if (!course) {
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      const response = await apperClient.getRecordById('course_c', parseInt(id), {
+        fields: [
+          {"field": {"Name": "Id"}},
+          {"field": {"Name": "name_c"}},
+          {"field": {"Name": "instructor_c"}},
+          {"field": {"Name": "color_c"}},
+          {"field": {"Name": "credits_c"}},
+          {"field": {"Name": "semester_c"}},
+          {"field": {"Name": "schedule_c"}}
+        ]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return null;
+      }
+
+      if (!response.data) {
         throw new Error("Course not found");
       }
-      return course;
+
+      // Transform database fields to UI format
+      const course = response.data;
+      return {
+        Id: course.Id,
+        name: course.name_c,
+        instructor: course.instructor_c,
+        color: course.color_c,
+        credits: course.credits_c,
+        semester: course.semester_c,
+        schedule: course.schedule_c ? JSON.parse(course.schedule_c) : []
+      };
     } catch (error) {
-      throw new Error("Failed to fetch course");
+      console.error(`Error fetching course ${id}:`, error?.response?.data?.message || error);
+      return null;
     }
   },
 
   async create(courseData) {
-    await delay(400);
     try {
-      const courses = getCourses();
-      const maxId = courses.length > 0 ? Math.max(...courses.map(c => c.Id)) : 0;
-      
-      const newCourse = {
-        ...courseData,
-        Id: maxId + 1,
-        createdAt: new Date().toISOString()
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
+      }
+
+      // Transform UI format to database fields (only Updateable fields)
+      const dbCourse = {
+        name_c: courseData.name,
+        instructor_c: courseData.instructor,
+        color_c: courseData.color,
+        credits_c: courseData.credits,
+        semester_c: courseData.semester,
+        schedule_c: JSON.stringify(courseData.schedule || [])
       };
-      
-      const updatedCourses = [...courses, newCourse];
-      saveCourses(updatedCourses);
-      return newCourse;
-    } catch (error) {
+
+      const response = await apperClient.createRecord('course_c', {
+        records: [dbCourse]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        throw new Error("Failed to create course");
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to create ${failed.length} courses:`, failed);
+          failed.forEach(record => {
+            record.errors?.forEach(error => toast.error(`${error.fieldLabel}: ${error}`));
+            if (record.message) toast.error(record.message);
+          });
+        }
+
+        if (successful.length > 0) {
+          const createdCourse = successful[0].data;
+          return {
+            Id: createdCourse.Id,
+            name: createdCourse.name_c,
+            instructor: createdCourse.instructor_c,
+            color: createdCourse.color_c,
+            credits: createdCourse.credits_c,
+            semester: createdCourse.semester_c,
+            schedule: createdCourse.schedule_c ? JSON.parse(createdCourse.schedule_c) : []
+          };
+        }
+      }
+
       throw new Error("Failed to create course");
+    } catch (error) {
+      console.error("Error creating course:", error?.response?.data?.message || error);
+      throw error;
     }
   },
 
   async update(id, courseData) {
-    await delay(400);
     try {
-      const courses = getCourses();
-      const index = courses.findIndex(c => c.Id === parseInt(id));
-      
-      if (index === -1) {
-        throw new Error("Course not found");
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
       }
-      
-      const updatedCourse = {
-        ...courses[index],
-        ...courseData,
-        Id: parseInt(id)
+
+      // Transform UI format to database fields (only Updateable fields)
+      const dbCourse = {
+        Id: parseInt(id),
+        name_c: courseData.name,
+        instructor_c: courseData.instructor,
+        color_c: courseData.color,
+        credits_c: courseData.credits,
+        semester_c: courseData.semester,
+        schedule_c: JSON.stringify(courseData.schedule || [])
       };
-      
-      const updatedCourses = [...courses];
-      updatedCourses[index] = updatedCourse;
-      saveCourses(updatedCourses);
-      return updatedCourse;
-    } catch (error) {
+
+      const response = await apperClient.updateRecord('course_c', {
+        records: [dbCourse]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        throw new Error("Failed to update course");
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to update ${failed.length} courses:`, failed);
+          failed.forEach(record => {
+            record.errors?.forEach(error => toast.error(`${error.fieldLabel}: ${error}`));
+            if (record.message) toast.error(record.message);
+          });
+        }
+
+        if (successful.length > 0) {
+          const updatedCourse = successful[0].data;
+          return {
+            Id: updatedCourse.Id,
+            name: updatedCourse.name_c,
+            instructor: updatedCourse.instructor_c,
+            color: updatedCourse.color_c,
+            credits: updatedCourse.credits_c,
+            semester: updatedCourse.semester_c,
+            schedule: updatedCourse.schedule_c ? JSON.parse(updatedCourse.schedule_c) : []
+          };
+        }
+      }
+
       throw new Error("Failed to update course");
+    } catch (error) {
+      console.error("Error updating course:", error?.response?.data?.message || error);
+      throw error;
     }
   },
 
   async delete(id) {
-    await delay(300);
     try {
-      const courses = getCourses();
-      const filteredCourses = courses.filter(c => c.Id !== parseInt(id));
-      
-      if (filteredCourses.length === courses.length) {
-        throw new Error("Course not found");
+      const apperClient = getApperClient();
+      if (!apperClient) {
+        throw new Error("ApperClient not initialized");
       }
-      
-      saveCourses(filteredCourses);
-      return true;
+
+      const response = await apperClient.deleteRecord('course_c', {
+        RecordIds: [parseInt(id)]
+      });
+
+      if (!response.success) {
+        console.error(response.message);
+        toast.error(response.message);
+        return false;
+      }
+
+      if (response.results) {
+        const successful = response.results.filter(r => r.success);
+        const failed = response.results.filter(r => !r.success);
+        
+        if (failed.length > 0) {
+          console.error(`Failed to delete ${failed.length} courses:`, failed);
+          failed.forEach(record => {
+            if (record.message) toast.error(record.message);
+          });
+        }
+        return successful.length > 0;
+      }
+
+      return false;
     } catch (error) {
-      throw new Error("Failed to delete course");
+      console.error("Error deleting course:", error?.response?.data?.message || error);
+      return false;
     }
   }
 };

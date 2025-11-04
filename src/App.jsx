@@ -1,29 +1,9 @@
-import { RouterProvider, createBrowserRouter } from "react-router-dom";
+import { RouterProvider } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
-import React from "react";
-import Grades from "@/components/pages/Grades";
-import Dashboard from "@/components/pages/Dashboard";
-import Courses from "@/components/pages/Courses";
-import Assignments from "@/components/pages/Assignments";
-import Calendar from "@/components/pages/Calendar";
-import Layout from "@/components/organisms/Layout";
-
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Layout />,
-    children: [
-      { index: true, element: <Dashboard /> },
-      { path: "grades", element: <Grades /> },
-      { path: "courses", element: <Courses /> },
-      { path: "assignments", element: <Assignments /> },
-      { path: "calendar", element: <Calendar /> },
-    ],
-  },
-]);
+import { router } from "./router";
 
 function App() {
-return (
+  return (
     <>
       <RouterProvider router={router} />
       <ToastContainer
