@@ -5,24 +5,30 @@ import Header from "@/components/organisms/Header";
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // App-level state that will be passed to all route components
+  const outletContext = {
+    sidebarOpen,
+    setSidebarOpen
+  };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar */}
-      <Sidebar 
+<Sidebar 
         isOpen={sidebarOpen} 
         onClose={() => setSidebarOpen(false)} 
       />
 
       {/* Main content */}
       <div className="lg:pl-64">
-        <Header 
+<Header 
           title="StudyFlow"
           onMenuClick={() => setSidebarOpen(true)}
         />
         
         <main className="px-4 sm:px-6 lg:px-8 py-8">
-          <Outlet />
+<Outlet context={outletContext} />
         </main>
       </div>
     </div>
